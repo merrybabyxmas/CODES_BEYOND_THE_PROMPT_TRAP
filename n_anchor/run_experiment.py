@@ -606,18 +606,36 @@ class NarrativeVideoGenerator:
         self._current_condition = condition
 
     def get_prompt(self, story, shot_idx, condition):
-        """Get the appropriate prompt for a given condition."""
+        """Get the appropriate prompt for a given condition.
+
+        Supports both legacy format (translated_prompts) and LLM format
+        (full_prompts + action_prompts).
+        """
         if condition == 'baseline':
             return story['raw_sentences'][shot_idx]
+
         elif condition == 'text_concat':
-            anchor_text = (
-                f"{story['anchor']['entity']}. "
-                f"{story['anchor']['background']}. "
-            )
-            return anchor_text + story['translated_prompts'][shot_idx]
+            # Use full_prompts if available (LLM-generated, includes identity)
+            if 'full_prompts' in story:
+                anchor_text = (
+                    f"{story['anchor']['entity']}. "
+                    f"{story['anchor']['background']}. "
+                )
+                return anchor_text + story['full_prompts'][shot_idx]
+            else:
+                anchor_text = (
+                    f"{story['anchor']['entity']}. "
+                    f"{story['anchor']['background']}. "
+                )
+                return anchor_text + story['translated_prompts'][shot_idx]
+
         else:
-            # All n_anchor variants use translated prompts
-            return story['translated_prompts'][shot_idx]
+            # All n_anchor variants: use action_prompts (no identity in text)
+            # Identity comes through cross-attention anchor injection
+            if 'action_prompts' in story:
+                return story['action_prompts'][shot_idx]
+            else:
+                return story['translated_prompts'][shot_idx]
 
     def generate_shot(self, story, shot_idx, condition, seed):
         """
@@ -920,7 +938,7 @@ def main():
                         default=['baseline', 'text_concat', 'n_anchor_concat'],
                         help='Conditions to run')
     parser.add_argument('--narratives', type=str, default='synthetic',
-                        choices=['synthetic', 'novel', 'all'],
+                        choices=['synthetic', 'novel', 'llm', 'all'],
                         help='Which narratives to use (default: synthetic)')
     parser.add_argument('--eval_only', action='store_true',
                         help='Skip generation, only run evaluation')
@@ -947,14 +965,20 @@ def main():
     config['conditions'] = args.conditions
 
     # Load narratives
-    if args.narratives == 'novel' or args.narratives == 'all':
+    if args.narratives in ('novel', 'all'):
         from novel_narratives import NOVEL_NARRATIVES
+    if args.narratives in ('llm', 'all'):
+        from llm_translator import process_scenes
+        LLM_NARRATIVES = process_scenes(force=False)
+
     if args.narratives == 'synthetic':
         config['_narratives'] = NARRATIVES
     elif args.narratives == 'novel':
         config['_narratives'] = NOVEL_NARRATIVES
+    elif args.narratives == 'llm':
+        config['_narratives'] = LLM_NARRATIVES
     elif args.narratives == 'all':
-        config['_narratives'] = NARRATIVES + NOVEL_NARRATIVES
+        config['_narratives'] = NARRATIVES + NOVEL_NARRATIVES + LLM_NARRATIVES
 
     logging.info("=" * 60)
     logging.info("N-Anchor Experiment")
