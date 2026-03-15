@@ -1,0 +1,17 @@
+# Output videos and experiment results (too large for git)
+n_anchor/outputs/
+n_anchor/data/
+
+# External reference repositories (cloned separately)
+related_git_repos/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.eggs/
+
+# OS
+.DS_Store
+Thumbs.db
