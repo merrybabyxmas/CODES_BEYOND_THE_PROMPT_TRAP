@@ -498,7 +498,8 @@ def compute_clip_text_image_similarity(image, text, clip_model, preprocess,
     Returns: float similarity score
     """
     img_tensor = preprocess(image).unsqueeze(0).to(device)
-    text_tokens = tokenizer([text]).to(device)
+    # CLIP has 77 token limit; truncate long prompts
+    text_tokens = tokenizer([text], truncate=True).to(device)
 
     img_feat = clip_model.encode_image(img_tensor)
     text_feat = clip_model.encode_text(text_tokens)
@@ -856,8 +857,12 @@ def evaluate_all(output_dir, config):
             # Narrative Alignment: CLIP text-image similarity
             story_alignments = []
             for shot_idx, frame in enumerate(frames):
-                # Use translated prompt for all conditions (fair comparison)
-                prompt = story['translated_prompts'][shot_idx]
+                # Use full prompt for all conditions (fair comparison)
+                # Supports both legacy (translated_prompts) and LLM (full_prompts)
+                if 'full_prompts' in story:
+                    prompt = story['full_prompts'][shot_idx]
+                else:
+                    prompt = story['translated_prompts'][shot_idx]
                 sim = compute_clip_text_image_similarity(
                     frame, prompt, clip_model, preprocess, tokenizer, device)
                 story_alignments.append(sim)
